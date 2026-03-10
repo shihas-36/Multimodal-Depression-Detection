@@ -17,7 +17,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import pandas as pd
 import gradio as gr
-from transformers import AutoTokenizer, AutoModelForSequenceClassification
+from transformers import AutoTokenizer, AutoModel
 from sklearn.preprocessing import StandardScaler
 
 # ---------- DEVICE ----------
@@ -27,10 +27,11 @@ print("Using device:", device)
 # ---------- PATHS ----------
 SAVE_PATH = "./"
 
-TWHIN_TOKENIZER_DIR = os.path.join(SAVE_PATH, "twhin_bert_tokenizer")
-TWHIN_MODEL_DIR = os.path.join(SAVE_PATH, "twhin_bert_sentiment_model")
 WEARABLE_PATH = os.path.join(SAVE_PATH, "module2_wearable_features.pt")
 SOTA_MODEL_PATH = os.path.join(SAVE_PATH, "best_model_87.pt")
+
+# TwHIN-BERT will be loaded directly from Hugging Face
+TWHIN_MODEL_NAME = "Twitter/twhin-bert-base"
 
 # ---------- FEATURES ----------
 FEATURE_COLUMNS_FINAL = [
@@ -94,16 +95,16 @@ class SOTA_MultimodalModel(nn.Module):
 
 
 # ---------- LOAD MODELS ----------
-print("Loading TwHIN-BERT...")
+print("Loading TwHIN-BERT from Hugging Face...")
 
-tokenizer = AutoTokenizer.from_pretrained(TWHIN_TOKENIZER_DIR)
+tokenizer = AutoTokenizer.from_pretrained(TWHIN_MODEL_NAME)
 
-twhin_model = AutoModelForSequenceClassification.from_pretrained(
-    TWHIN_MODEL_DIR,
+twhin_model = AutoModel.from_pretrained(
+    TWHIN_MODEL_NAME,
     output_hidden_states=True
 ).to(device).eval()
 
-print("TwHIN loaded")
+print("TwHIN-BERT loaded from Hugging Face")
 
 # ---------- WEARABLE DATA ----------
 wearable_features = torch.load(WEARABLE_PATH)
