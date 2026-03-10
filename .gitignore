@@ -1,0 +1,27 @@
+# Model files
+
+*.safetensors
+# Model directories
+twhin_bert_sentiment_model/
+twhin_bert_tokenizer/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv
+venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
