@@ -48,6 +48,19 @@ coverage.xml
 *.swp
 *.swo
 *~
+
+# Media (if large)
+media/
+staticfiles/
+
+# Node (Flutter web assets if not needed)
+node_modules/
+APPLICATION/build/
+APPLICATION/.dart_tool/
+
+# Environment
+.env
+.env.local
 .DS_Store
 *.sublime-project
 *.sublime-workspace

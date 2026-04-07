@@ -1,8 +1,26 @@
+# Stage 1: Builder
+FROM python:3.10-slim as builder
+
+WORKDIR /tmp
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy requirements
+COPY requirements.txt .
+
+# Build wheels in builder stage
+RUN pip install --upgrade pip && \
+    pip wheel --no-cache-dir --no-deps --wheel-dir /tmp/wheels -r requirements.txt
+
+# Stage 2: Runtime
 FROM python:3.10-slim
 
 WORKDIR /app
 
-# Install minimal runtime dependencies (no build tools needed - using pre-built wheels)
+# Install only runtime dependencies
 RUN apt-get update && apt-get install -y \
     libglib2.0-0 \
     libsm6 \
@@ -12,12 +30,13 @@ RUN apt-get update && apt-get install -y \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Upgrade pip for better wheel support
-RUN pip install --upgrade pip setuptools wheel
+# Copy wheels from builder
+COPY --from=builder /tmp/wheels /tmp/wheels
 
-# Install Python dependencies (all have pre-built wheels)
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# Install wheels (much faster than building)
+RUN pip install --upgrade pip && \
+    pip install --no-cache /tmp/wheels/* && \
+    rm -rf /tmp/wheels
 
 # Copy application code
 COPY . .
@@ -26,10 +45,9 @@ COPY . .
 RUN mkdir -p /app/staticfiles /app/media
 
 # Collect static files
-RUN python manage.py collectstatic --noinput || true
+RUN python manage.py collectstatic --noinput --clear || true
 
 EXPOSE 8000
 
-
-# Default command
-CMD ["python", "manage.py", "runserver", "0.0.0.0:8000"]
+# Use gunicorn for production
+CMD ["gunicorn", "--bind", "0.0.0.0:8000", "--workers", "3", "config.wsgi:application"]
