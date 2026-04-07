@@ -4,6 +4,8 @@ python-decouple==3.8
 psycopg2-binary==2.9.9
 dj-database-url==2.1.0
 gunicorn==21.2.0
+numpy==1.26.4
+torch==2.11.0
 celery==5.3.4
 redis==5.0.1
 django-cors-headers==4.3.1
