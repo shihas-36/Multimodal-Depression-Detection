@@ -4,10 +4,13 @@ python-decouple==3.8
 psycopg2-binary==2.9.9
 dj-database-url==2.1.0
 gunicorn==21.2.0
+flwr==1.8.0
+torch==2.11.0
+numpy==1.26.4
+Pillow==10.1.0
 celery==5.3.4
 redis==5.0.1
 django-cors-headers==4.3.1
 djangorestframework-simplejwt==5.3.1
 django-celery-beat==2.5.0
 requests==2.31.0
-

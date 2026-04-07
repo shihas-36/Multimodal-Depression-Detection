@@ -10,13 +10,20 @@ Handles:
 import io
 import hashlib
 import pickle
-import numpy as np
-import torch
 from django.conf import settings
 from django.utils import timezone
 from django.db.models import Avg
 from django.db import transaction
 import logging
+
+# Optional imports - only needed for ML operations (Celery worker)
+try:
+    import numpy as np
+    import torch
+    HAS_ML_LIBS = True
+except ImportError:
+    HAS_ML_LIBS = False
+    logger = logging.getLogger(__name__)
 
 logger = logging.getLogger(__name__)
 
@@ -358,6 +365,10 @@ def export_to_onnx(model, input_shapes, output_path):
         input_shapes: Tuple of input shapes for dummy input
         output_path: Path to save ONNX file
     """
+    if not HAS_ML_LIBS:
+        logger.warning("PyTorch not available - ONNX export runs on Celery worker only")
+        return False
+    
     try:
         # Create dummy inputs
         dummy_text = torch.randn(1, input_shapes[0])
