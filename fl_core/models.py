@@ -1,6 +1,7 @@
 from django.db import models
 from django.contrib.auth.models import User
 from django.utils import timezone
+from datetime import timedelta
 import uuid
 
 
@@ -32,6 +33,7 @@ class ModelVersion(models.Model):
     description = models.TextField(blank=True)
     model_file = models.FileField(upload_to='models/')
     onnx_file = models.FileField(upload_to='models/onnx/', null=True, blank=True)
+    model_data = models.BinaryField(null=True, blank=True, help_text="Serialized model weights (state_dict)")
     is_active = models.BooleanField(default=False)  # Current production model
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -49,12 +51,14 @@ class Round(models.Model):
         ('pending', 'Pending'),
         ('active', 'Active'),
         ('closed', 'Closed'),
+        ('aggregated', 'Aggregated'),
         ('completed', 'Completed'),
         ('failed', 'Failed'),
     ]
     
     round_number = models.IntegerField(unique=True)
-    model_version = models.ForeignKey(ModelVersion, on_delete=models.PROTECT)
+    model_version = models.ForeignKey(ModelVersion, on_delete=models.PROTECT, help_text="Initial model for this round")
+    aggregated_model_version = models.ForeignKey(ModelVersion, on_delete=models.SET_NULL, null=True, blank=True, related_name='aggregated_rounds', help_text="Model version created from this round's aggregation")
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
     min_clients = models.IntegerField(default=3)
     max_clients = models.IntegerField(default=100)
@@ -91,13 +95,15 @@ class ClientUpdate(models.Model):
     num_examples = models.IntegerField()
     local_loss = models.FloatField(null=True, blank=True)
     local_accuracy = models.FloatField(null=True, blank=True)
-    weight_delta = models.BinaryField(help_text="Serialized weight delta or gradients")
+    weight_delta = models.BinaryField(help_text="Serialized FULL model weights (state_dict) from client local training")
     parameters_hash = models.CharField(max_length=64, help_text="SHA256 hash of parameters")
     dp_clip_norm = models.FloatField(null=True, blank=True)
     dp_noise_scale = models.FloatField(null=True, blank=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
     submitted_at = models.DateTimeField(auto_now_add=True)
     validated_at = models.DateTimeField(null=True, blank=True)
+    is_valid = models.BooleanField(default=True, help_text="Passed validation during aggregation")
+    validation_error = models.TextField(null=True, blank=True, help_text="Validation error details if failed")
     
     class Meta:
         unique_together = ('device', 'round')
@@ -124,12 +130,17 @@ class RoundMetrics(models.Model):
 
 
 class DeviceToken(models.Model):
-    """API tokens for device authentication."""
+    """API tokens for device authentication with expiry."""
     device = models.OneToOneField(Device, on_delete=models.CASCADE, related_name='token')
     token = models.CharField(max_length=255, unique=True)
     created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField(help_text="Token expiration time")
     last_used = models.DateTimeField(null=True, blank=True)
     is_active = models.BooleanField(default=True)
+    
+    def is_expired(self):
+        """Check if token has expired."""
+        return timezone.now() > self.expires_at
     
     def __str__(self):
         return f"Token for {self.device.device_name}"

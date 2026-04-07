@@ -11,7 +11,7 @@ SECRET_KEY = config(
     default='django-insecure-dev-key-change-in-production'
 )
 DEBUG = config('DEBUG', default=True, cast=bool)
-ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1,192.168.1.3', cast=lambda v: [s.strip() for s in v.split(',')])
+ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1,192.168.1.3,10.34.207.197', cast=lambda v: [s.strip() for s in v.split(',')])
 
 # Apps
 INSTALLED_APPS = [

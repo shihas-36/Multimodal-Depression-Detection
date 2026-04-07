@@ -33,6 +33,7 @@ def auto_close_round(round_id):
         logger.info(f"Round {round_id} auto-closed")
         
         # Trigger aggregation if enough clients participated
+        # Uses trigger_aggregation_task for centralized execution (FIX 2)
         participating = round_obj.client_updates.filter(
             status__in=['received', 'validated']
         ).count()
@@ -52,28 +53,45 @@ def auto_close_round(round_id):
 @shared_task
 def trigger_aggregation_task(round_id):
     """
-    Trigger aggregation for a closed round.
+    Centralized aggregation task - ONLY execution point for aggregation.
+    Implements duplicate prevention with locking mechanism.
     
     Args:
         round_id: ID of round to aggregate
+    
+    FIX 2: Single execution point
+    FIX 3: Prevent duplicate execution
+    FIX 4: Lock with aggregating status
     """
     try:
         round_obj = Round.objects.get(id=round_id)
         
         if round_obj.status != 'closed':
             logger.warning(f"Round {round_id} is not closed, cannot aggregate")
-            return
+            return {"status": "error", "reason": "round_not_closed"}
+        
+        # FIX 3: Check if already aggregated (idempotent)
+        if round_obj.status == 'aggregated':
+            logger.info(f"Round {round_id} already aggregated, skipping")
+            return {"status": "already_aggregated", "round_id": round_id}
+        
+        # FIX 4: Use aggregating status as lock
+        if round_obj.aggregation_status == 'in_progress':
+            logger.warning(f"Round {round_id} aggregation already running")
+            return {"status": "already_running", "round_id": round_id}
         
         logger.info(f"Starting aggregation for round {round_id}")
         
+        # FIX 4: Lock - transition to aggregating state
         round_obj.aggregation_status = 'in_progress'
         round_obj.save()
         
         # Run aggregation
         result = run_aggregation(round_obj)
         
-        if result['status'] == 'success':
-            round_obj.status = 'completed'
+        if result.get('status') == 'success':
+            # FIX 3 + 4: Mark as aggregated (prevent re-execution)
+            round_obj.status = 'aggregated'
             round_obj.aggregation_status = 'completed'
             round_obj.ended_at = timezone.now()
             round_obj.save()
@@ -87,8 +105,16 @@ def trigger_aggregation_task(round_id):
         return result
     except Round.DoesNotExist:
         logger.error(f"Round {round_id} not found")
+        return {"status": "error", "reason": "round_not_found"}
     except Exception as e:
         logger.error(f"Error aggregating round {round_id}: {e}")
+        try:
+            round_obj = Round.objects.get(id=round_id)
+            round_obj.aggregation_status = 'failed'
+            round_obj.save()
+        except:
+            pass
+        return {"status": "error", "reason": str(e)}
 
 
 @shared_task

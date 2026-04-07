@@ -24,10 +24,14 @@ class DeviceRegisterSerializer(serializers.Serializer):
     app_version = serializers.CharField(max_length=20)
     
     def create(self, validated_data):
+        from datetime import timedelta
+        from django.utils import timezone
+        
         device = Device.objects.create(**validated_data)
         token = DeviceToken.objects.create(
             device=device,
-            token=secrets.token_urlsafe(32)
+            token=secrets.token_urlsafe(32),
+            expires_at=timezone.now() + timedelta(hours=24)  # FIX 1: Token expires in 24 hours
         )
         return device, token
 
@@ -90,10 +94,19 @@ class ClientUpdateSubmitSerializer(serializers.Serializer):
     num_examples = serializers.IntegerField(min_value=1)
     local_loss = serializers.FloatField(required=False, allow_null=True)
     local_accuracy = serializers.FloatField(required=False, allow_null=True)
-    weight_delta = serializers.CharField()  # Base64 encoded binary
+    weight_delta = serializers.CharField()  # Base64 encoded binary - FULL model weights
     parameters_hash = serializers.CharField(max_length=64)
+    model_version = serializers.CharField(max_length=20)  # Client model version for consistency check
     dp_clip_norm = serializers.FloatField(required=False, allow_null=True)
     dp_noise_scale = serializers.FloatField(required=False, allow_null=True)
+    
+    def validate_num_examples(self, value):
+        """Validate num_examples is in valid range."""
+        if value <= 0 or value > 10000:
+            raise serializers.ValidationError(
+                f"num_examples must be between 1 and 10000, got {value}"
+            )
+        return value
 
 
 class RoundStatusSerializer(serializers.ModelSerializer):

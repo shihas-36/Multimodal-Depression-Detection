@@ -1,7 +1,8 @@
 from django.urls import path
 from .views import (
     register_device, get_latest_model, get_current_round, get_round_status,
-    submit_update, get_device_profile, create_round, close_round, trigger_aggregation
+    submit_update, get_device_profile, create_round, close_round, trigger_aggregation,
+    refresh_token, get_update_receipt
 )
 
 app_name = 'fl_core'
@@ -9,6 +10,7 @@ app_name = 'fl_core'
 urlpatterns = [
     # Device endpoints
     path('devices/register/', register_device, name='register_device'),
+    path('devices/refresh-token/', refresh_token, name='refresh_token'),
     path('devices/profile/', get_device_profile, name='device_profile'),
     
     # Model endpoints
@@ -23,4 +25,5 @@ urlpatterns = [
     
     # Update endpoints
     path('updates/submit/', submit_update, name='submit_update'),
+    path('updates/<uuid:update_id>/receipt/', get_update_receipt, name='get_update_receipt'),
 ]

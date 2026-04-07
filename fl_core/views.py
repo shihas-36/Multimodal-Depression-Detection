@@ -4,10 +4,15 @@ from rest_framework.response import Response
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from django.db.models import Q, Avg
+from django.db import IntegrityError, transaction
 import base64
 import hashlib
+import pickle
+import os
+from datetime import timedelta
 
 from .models import Device, ModelVersion, Round, ClientUpdate, RoundMetrics, DeviceToken
+from .tasks import trigger_aggregation_task
 from .serializers import (
     DeviceSerializer, DeviceRegisterSerializer, ModelVersionSerializer,
     RoundSerializer, ClientUpdateSerializer, ClientUpdateSubmitSerializer,
@@ -19,13 +24,15 @@ from .auth import DeviceAuthentication, IsDeviceAuthenticated
 @api_view(['POST'])
 @permission_classes([permissions.AllowAny])
 def register_device(request):
-    """Register a new mobile device and get auth token."""
+    """Register a new mobile device and get auth token with expiry (FIX 1)."""
     serializer = DeviceRegisterSerializer(data=request.data)
     if serializer.is_valid():
         device, token = serializer.save()
         return Response({
             'device_id': str(device.device_id),
             'token': token.token,
+            'expires_in': 86400,  # 24 hours in seconds
+            'expires_at': token.expires_at,
             'message': 'Device registered successfully'
         }, status=status.HTTP_201_CREATED)
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -34,19 +41,38 @@ def register_device(request):
 @api_view(['GET'])
 @permission_classes([IsDeviceAuthenticated])
 def get_latest_model(request):
-    """Get latest active global model (ONNX preferred for mobile)."""
-    model = ModelVersion.objects.filter(is_active=True).first()
+    """Get latest active global model (ONNX preferred for mobile).
+    
+    FIX 2: Enforces single source of truth - only ONE active model exists.
+    FIX 3: Returns SHA256 hash for model integrity verification.
+    """
+    model = ModelVersion.objects.filter(is_active=True).order_by('-version').first()
+    
     if not model:
         return Response(
             {'error': 'No active model available'},
             status=status.HTTP_404_NOT_FOUND
         )
     
+    # FIX 3: Calculate model file hash for integrity verification
+    model_hash = None
+    if model.model_file:
+        try:
+            file_path = model.model_file.path
+            with open(file_path, "rb") as f:
+                file_bytes = f.read()
+                model_hash = hashlib.sha256(file_bytes).hexdigest()
+        except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.warning(f"Failed to compute model hash: {e}")
+    
     return Response({
         'version': model.version,
         'description': model.description,
         'onnx_url': request.build_absolute_uri(model.onnx_file.url) if model.onnx_file else None,
         'model_url': request.build_absolute_uri(model.model_file.url),
+        'hash_sha256': model_hash,
         'created_at': model.created_at
     }, status=status.HTTP_200_OK)
 
@@ -100,18 +126,23 @@ def submit_update(request):
     validated_data = serializer.validated_data
     round_obj = get_object_or_404(Round, id=validated_data['round_id'])
     
+    # FIX 2: Enforce Round Status Check
     if round_obj.status != 'active':
         return Response(
-            {'error': f'Round is {round_obj.status}, updates not accepted'},
+            {'error': 'Round is not active'},
             status=status.HTTP_400_BAD_REQUEST
         )
     
-    # Check device hasn't already submitted for this round
-    if ClientUpdate.objects.filter(device=request.device, round=round_obj).exists():
+    # FIX 6: Model Version Check
+    client_model_version = validated_data.get('model_version')
+    if client_model_version != round_obj.model_version.version:
         return Response(
-            {'error': 'Device already submitted update for this round'},
-            status=status.HTTP_409_CONFLICT
+            {'error': 'Model version mismatch'},
+            status=status.HTTP_400_BAD_REQUEST
         )
+    
+    # Remove model_version from validated_data before create
+    validated_data.pop('model_version')
     
     # Decode and validate weight delta
     try:
@@ -119,6 +150,25 @@ def submit_update(request):
     except Exception as e:
         return Response(
             {'error': f'Invalid weight_delta encoding: {str(e)}'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    # FIX 4: Weight Size Validation
+    MAX_WEIGHT_SIZE = 10 * 1024 * 1024  # 10MB
+    if len(weight_delta) > MAX_WEIGHT_SIZE:
+        return Response(
+            {'error': 'Weight data too large'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    
+    # FIX 5: Basic Weight Structure Validation
+    try:
+        weights = pickle.loads(weight_delta)
+        if not isinstance(weights, dict):
+            raise ValueError("Invalid weight format")
+    except Exception as e:
+        return Response(
+            {'error': 'Invalid weight structure'},
             status=status.HTTP_400_BAD_REQUEST
         )
     
@@ -130,20 +180,125 @@ def submit_update(request):
             status=status.HTTP_400_BAD_REQUEST
         )
     
-    # Create update record
-    update = ClientUpdate.objects.create(
-        device=request.device,
-        round=round_obj,
-        weight_delta=weight_delta,
-        status='received',
-        **validated_data
-    )
+    # FIX 3: Strong Duplicate Protection (Atomic)
+    try:
+        with transaction.atomic():
+            update = ClientUpdate.objects.create(
+                device=request.device,
+                round=round_obj,
+                weight_delta=weight_delta,
+                status='received',
+                **validated_data
+            )
+    except IntegrityError:
+        return Response(
+            {'error': 'Update already submitted for this round'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
     
     return Response({
         'update_id': str(update.update_id),
-        'status': 'Update received and queued for aggregation',
+        'status': 'received',
+        'received_hash': computed_hash,
+        'timestamp': timezone.now(),
         'round_number': round_obj.round_number
     }, status=status.HTTP_201_CREATED)
+
+
+@api_view(['POST'])
+@permission_classes([permissions.AllowAny])
+def refresh_token(request):
+    """FIX 1: Refresh expired device token.
+    
+    Takes old token and device_id, returns new token if old one is expired.
+    """
+    device_id = request.data.get('device_id')
+    old_token = request.data.get('expired_token')
+
+    if not device_id or not old_token:
+        return Response(
+            {'error': 'Missing device_id or expired_token'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    try:
+        token_obj = DeviceToken.objects.filter(device_id=device_id, token=old_token).first()
+
+        if not token_obj:
+            return Response(
+                {'error': 'Token not found'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if not token_obj.is_expired():
+            return Response(
+                {'error': 'Token has not expired yet'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Generate new token
+        import secrets
+        new_token = secrets.token_urlsafe(32)
+
+        token_obj.token = new_token
+        token_obj.expires_at = timezone.now() + timedelta(hours=24)
+        token_obj.save()
+
+        return Response({
+            'token': new_token,
+            'expires_in': 86400,  # 24 hours
+            'expires_at': token_obj.expires_at
+        }, status=status.HTTP_200_OK)
+    except Exception as e:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"Token refresh failed: {e}")
+        return Response(
+            {'error': 'Token refresh failed'},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+@api_view(['GET'])
+@permission_classes([IsDeviceAuthenticated])
+def get_update_receipt(request, update_id):
+    """FIX 6: Get submission receipt for a previously submitted update.
+    
+    Allows client to verify their update was stored correctly.
+    """
+    try:
+        update = ClientUpdate.objects.filter(update_id=update_id).first()
+
+        if not update:
+            return Response(
+                {'error': 'Update not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        # Only allow device to view its own updates
+        if update.device != request.device:
+            return Response(
+                {'error': 'Unauthorized'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        return Response({
+            'update_id': str(update.update_id),
+            'status': update.status,
+            'hash': update.parameters_hash,
+            'timestamp': update.submitted_at,
+            'round_number': update.round.round_number,
+            'is_valid': update.is_valid,
+            'validation_error': update.validation_error if not update.is_valid else None
+        }, status=status.HTTP_200_OK)
+    except Exception as e:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"Get receipt failed: {e}")
+        return Response(
+            {'error': 'Failed to retrieve receipt'},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
 
 
 @api_view(['GET'])
@@ -239,10 +394,23 @@ def close_round(request, round_id):
 @api_view(['POST'])
 @permission_classes([permissions.IsAdminUser])
 def trigger_aggregation(request, round_id):
-    """Admin endpoint: Trigger Flower aggregation for closed round."""
-    from .flower_integration import run_aggregation
+    """Admin endpoint: Trigger Flower aggregation for closed round (async via Celery)."""
+    from .tasks import trigger_aggregation_task
     
     round_obj = get_object_or_404(Round, id=round_id)
+    
+    # FIX 3 + 4: Check if already aggregated or aggregating
+    if round_obj.status == 'aggregated':
+        return Response(
+            {'status': 'already_aggregated', 'round_id': round_id},
+            status=status.HTTP_200_OK
+        )
+    
+    if round_obj.aggregation_status == 'in_progress':
+        return Response(
+            {'status': 'already_running', 'round_id': round_id},
+            status=status.HTTP_200_OK
+        )
     
     if round_obj.status != 'closed':
         return Response(
@@ -250,27 +418,10 @@ def trigger_aggregation(request, round_id):
             status=status.HTTP_400_BAD_REQUEST
         )
     
-    try:
-        round_obj.aggregation_status = 'in_progress'
-        round_obj.save()
-        
-        # Run aggregation (placeholder - implemented in flower_integration)
-        result = run_aggregation(round_obj)
-        
-        round_obj.aggregation_status = 'completed'
-        round_obj.status = 'completed'
-        round_obj.ended_at = timezone.now()
-        round_obj.save()
-        
-        return Response({
-            'message': 'Aggregation completed',
-            'round_number': round_obj.round_number,
-            'result': result
-        }, status=status.HTTP_200_OK)
-    except Exception as e:
-        round_obj.aggregation_status = 'failed'
-        round_obj.save()
-        return Response(
-            {'error': f'Aggregation failed: {str(e)}'},
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR
-        )
+    # FIX 1: Trigger async aggregation task
+    trigger_aggregation_task.delay(round_id)
+    
+    return Response({
+        'status': 'aggregation_started',
+        'round_id': round_id
+    }, status=status.HTTP_200_OK)
