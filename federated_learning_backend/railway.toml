@@ -50,7 +50,6 @@ SECURE_HSTS_SECONDS=31536000
 SECURE_HSTS_INCLUDE_SUBDOMAINS=True
 """
 
-[volumes]
 # Media storage (persistent)
 [[volumes]]
 path = "/app/media"
