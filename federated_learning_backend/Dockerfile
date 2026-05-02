@@ -30,6 +30,5 @@ RUN python manage.py collectstatic --noinput || true
 
 EXPOSE 8000
 
-
-# Default command
-CMD ["python", "manage.py", "runserver", "0.0.0.0:8000"]
+# Railway will provide the start command via railway.toml
+# Do NOT set CMD here

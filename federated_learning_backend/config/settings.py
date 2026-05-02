@@ -61,35 +61,34 @@ WSGI_APPLICATION = 'config.wsgi.application'
 
 # Database
 # Railway provides DATABASE_URL, local uses individual vars
-if config('DATABASE_URL', default=None):
-    # Railway environment
+if os.environ.get('DATABASE_URL'):
+    # Railway environment - dj_database_url reads DATABASE_URL automatically
     DATABASES = {
         'default': dj_database_url.config(
-            default=config('DATABASE_URL'),
             conn_max_age=600,
             conn_health_checks=True,
         )
     }
+elif DEBUG:
+    # Local development with SQLite
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+        }
+    }
 else:
-    # Local development
-    if DEBUG:
-        DATABASES = {
-            'default': {
-                'ENGINE': 'django.db.backends.sqlite3',
-                'NAME': BASE_DIR / 'db.sqlite3',
-            }
+    # Local production with PostgreSQL
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.postgresql',
+            'NAME': config('DB_NAME', default='federated_learning'),
+            'USER': config('DB_USER', default='postgres'),
+            'PASSWORD': config('DB_PASSWORD', default='postgres'),
+            'HOST': config('DB_HOST', default='localhost'),
+            'PORT': config('DB_PORT', default='5432'),
         }
-    else:
-        DATABASES = {
-            'default': {
-                'ENGINE': 'django.db.backends.postgresql',
-                'NAME': config('DB_NAME', default='federated_learning'),
-                'USER': config('DB_USER', default='postgres'),
-                'PASSWORD': config('DB_PASSWORD', default='postgres'),
-                'HOST': config('DB_HOST', default='localhost'),
-                'PORT': config('DB_PORT', default='5432'),
-            }
-        }
+    }
 
 # Auth
 AUTH_PASSWORD_VALIDATORS = [
