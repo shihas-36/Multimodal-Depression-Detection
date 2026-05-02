@@ -1,0 +1,220 @@
+# =============================================================================
+# COMPREHENSIVE ROOT GITIGNORE - Multi-Tech Project
+# Python (Django), Flutter/Dart, Node.js, Java
+# =============================================================================
+
+# =============================================================================
+# PYTHON & DJANGO
+# =============================================================================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+.pytest_cache/
+.coverage
+htmlcov/
+venv/
+ENV/
+env/
+.venv
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Django specific
+*.log
+db.sqlite3
+db.sqlite3-journal
+/media/
+/staticfiles/
+.env
+.env.local
+.env.*.local
+
+# =============================================================================
+# FLUTTER & DART
+# =============================================================================
+**/doc/api/
+**/ios/Flutter/.last_build_id
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.pub-cache/
+.pub/
+/build/
+.flutter/
+
+# Symbolication related
+app.*.symbols
+app.*.map.json
+
+# Platform build artifacts
+/android/app/debug
+/android/app/profile
+/android/app/release
+
+# =============================================================================
+# NODE.JS & PACKAGE MANAGERS
+# =============================================================================
+node_modules/
+package-lock.json
+yarn.lock
+npm-debug.log
+yarn-error.log
+.npm
+
+# =============================================================================
+# IDEs & EDITORS
+# =============================================================================
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+*.sublime-project
+*.sublime-workspace
+.atom/
+.buildlog/
+.history
+.svn/
+
+# IntelliJ related
+*.iml
+*.ipr
+*.iws
+
+# =============================================================================
+# OS SPECIFIC
+# =============================================================================
+.DS_Store
+Thumbs.db
+desktop.ini
+.directory
+.Spotlight-V100
+.Trashes
+
+# =============================================================================
+# MACHINE LEARNING & MODEL FILES
+# =============================================================================
+*.pt
+*.pth
+*.pkl
+*.joblib
+*.model
+*.h5
+*.onnx
+*.pb
+
+# =============================================================================
+# BUILD & COMPILATION
+# =============================================================================
+*.class
+dist/
+build/
+.gradle/
+gradle/
+*.jar
+*.war
+*.ear
+.classpath
+.project
+.settings/
+target/
+
+# =============================================================================
+# DOCUMENTATION
+# =============================================================================
+*.md
+!README.md
+!CONTRIBUTING.md
+!LICENSE.md
+
+# =============================================================================
+# TEMPORARY & BACKUP FILES
+# =============================================================================
+*.tmp
+*.bak
+*.temp
+*~
+*.swp
+*.swo
+*.lock
+
+# =============================================================================
+# ENVIRONMENT & SECRETS
+# =============================================================================
+.env
+.env.local
+.env.*.local
+.env.production.local
+.env.example
+.secrets/
+secrets.json
+
+# =============================================================================
+# EXAMPLE & TEMPLATE FILES
+# =============================================================================
+*.example
+*.sample
+*.template
+
+# =============================================================================
+# DATABASE
+# =============================================================================
+*.sqlite
+*.sqlite3
+*.db
+*.dbf
+
+# =============================================================================
+# JAVA SPECIFIC
+# =============================================================================
+*.class
+*.jar
+*.war
+*.nar
+*.ear
+*.zip
+*.tar.gz
+*.rar
+.classpath
+.project
+.settings/
+.vscode-test/
+bin/
+lib/
+
+# =============================================================================
+# TEST & CREATION SCRIPTS (DO NOT COMMIT)
+# =============================================================================
+*test*.py
+*create*.py
+test_*.py
+create_*.py
+
+# =============================================================================
+# MISCELLANEOUS
+# =============================================================================
+.DS_Store
+Thumbs.db
+.cache/
+.temp/
+*.orig

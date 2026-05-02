@@ -1,0 +1,9 @@
+
+# This folder inherits gitignore rules from the root .gitignore
+# Add folder-specific patterns below if needed
+
+# Java upgrade temporary files
+*.bak
+*.orig
+.java-upgrade/
+
