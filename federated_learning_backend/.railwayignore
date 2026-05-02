@@ -1,0 +1,67 @@
+# Development and testing
+.venv/
+venv/
+env/
+*.pyc
+__pycache__/
+.pytest_cache/
+.tox/
+htmlcov/
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Environment files (use Railway secrets instead)
+.env
+.env.local
+.env.*.local
+
+# Database and cache
+*.db
+*.sqlite3
+db.sqlite3
+redis.rdb
+
+# Docker local files
+docker-compose.override.yml
+.dockerignore
+
+# Git and CI/CD
+.git/
+.gitignore
+.github/workflows/ # Optional: exclude workflows if using Railway native CI
+
+# Documentation and logs
+docs/
+logs/
+*.log
+*.md
+
+# Node modules (if applicable)
+node_modules/
+npm-debug.log*
+
+# OS files
+Thumbs.db
+*.pem
+*.key
+
+# Test coverage
+.coverage
+coverage.xml
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
+
+# Optional: Exclude Procfile if using railway.toml only
+# Procfile
+
+# Railway specific
+.railway/

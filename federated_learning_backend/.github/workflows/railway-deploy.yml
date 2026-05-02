@@ -1,0 +1,144 @@
+name: Deploy to Railway
+
+on:
+  push:
+    branches:
+      - main
+      - production
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  # Test job - runs on PR or before deploy
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_DB: test_fl_db
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run migrations
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_fl_db
+          REDIS_URL: redis://localhost:6379/0
+          DEBUG: 'False'
+          SECRET_KEY: test-secret-key
+        run: python manage.py migrate
+
+      - name: Run tests
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_fl_db
+          REDIS_URL: redis://localhost:6379/0
+          DEBUG: 'False'
+          SECRET_KEY: test-secret-key
+        run: python manage.py test
+
+      - name: Collect static files
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_fl_db
+          REDIS_URL: redis://localhost:6379/0
+          DEBUG: 'False'
+          SECRET_KEY: test-secret-key
+        run: python manage.py collectstatic --noinput --clear
+
+  # Deploy job - only runs on main branch push
+  deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0  # Full history for Railway
+
+      - name: Deploy to Railway
+        uses: railway-app/cli-action@v1
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        with:
+          args: up
+
+  # Deploy to production only on tag
+  deploy-production:
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Deploy to Railway Production
+        uses: railway-app/cli-action@v1
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN_PROD }}
+        with:
+          args: up --service django-fl --service celery-worker --service celery-beat
+
+  # Health check after deployment
+  health-check:
+    needs: deploy
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Wait for deployment
+        run: sleep 30
+
+      - name: Health check API
+        run: |
+          for i in {1..10}; do
+            if curl -f -s -o /dev/null -w "%{http_code}" https://django-fl-prod.railway.app/api/fl/rounds/current/; then
+              echo "✅ API is healthy"
+              exit 0
+            fi
+            echo "Attempt $i: waiting for API..."
+            sleep 10
+          done
+          echo "❌ API health check failed"
+          exit 1
+
+      - name: Notify Slack on failure
+        if: failure()
+        uses: 8398a7/action-slack@v3
+        with:
+          status: ${{ job.status }}
+          text: 'Railway deployment health check failed'
+          webhook_url: ${{ secrets.SLACK_WEBHOOK }}

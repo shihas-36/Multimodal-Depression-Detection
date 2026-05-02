@@ -211,10 +211,13 @@ test_*.py
 create_*.py
 
 # =============================================================================
-# MISCELLANEOUS
+# DOCUMENTATION & MARKDOWN FOLDERS
 # =============================================================================
 .DS_Store
 Thumbs.db
 .cache/
 .temp/
 *.orig
+MDfolder/
+docs/
+documentation/
