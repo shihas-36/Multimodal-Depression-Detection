@@ -12,7 +12,7 @@ SECRET_KEY = config(
     default='django-insecure-dev-key-change-in-production'
 )
 DEBUG = config('DEBUG', default=False, cast=bool)
-ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1,*.railway.app', cast=lambda v: [s.strip() for s in v.split(',')])
+ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1,*.railway.app,*.up.railway.app', cast=lambda v: [s.strip() for s in v.split(',')])
 
 # Apps
 INSTALLED_APPS = [
