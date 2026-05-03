@@ -41,6 +41,36 @@ def register_device(request):
 
 
 @api_view(['GET'])
+@permission_classes([permissions.AllowAny])
+def test_task(request):
+    """Test Celery task pipeline. Endpoint to verify Redis + Celery worker are connected.
+    
+    GET /api/fl/test-task/ should trigger a Celery task.
+    Check celery-worker logs to confirm task was received.
+    """
+    import logging
+    logger = logging.getLogger(__name__)
+    logger.info("🧪 TEST ENDPOINT CALLED — Triggering Celery task...")
+    
+    try:
+        # Trigger task asynchronously
+        task = trigger_aggregation_task.delay(round_id=1)
+        logger.info(f"✅ Task queued with ID: {task.id}")
+        
+        return Response({
+            "status": "task triggered",
+            "task_id": str(task.id),
+            "message": "Check celery-worker logs for 'Received task' message"
+        }, status=status.HTTP_200_OK)
+    except Exception as e:
+        logger.error(f"❌ Failed to trigger task: {e}")
+        return Response({
+            "status": "error",
+            "error": str(e)
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['GET'])
 @permission_classes([IsDeviceAuthenticated])
 def get_latest_model(request):
     """Get latest active global model (ONNX preferred for mobile).

@@ -51,6 +51,7 @@ def auto_close_round(round_id):
 
 
 @shared_task
+@shared_task
 def trigger_aggregation_task(round_id):
     """
     Centralized aggregation task - ONLY execution point for aggregation.
@@ -63,6 +64,9 @@ def trigger_aggregation_task(round_id):
     FIX 3: Prevent duplicate execution
     FIX 4: Lock with aggregating status
     """
+    print("🚀 TASK EXECUTED: trigger_aggregation_task")
+    logger.info(f"🚀 TASK EXECUTED: trigger_aggregation_task for round {round_id}")
+    
     try:
         round_obj = Round.objects.get(id=round_id)
         
