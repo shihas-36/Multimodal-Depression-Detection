@@ -1,34 +1,38 @@
 FROM python:3.10-slim
 
+# Prevent buffering (important for logs)
+ENV PYTHONUNBUFFERED=1
+
 WORKDIR /app
 
-# Install minimal runtime dependencies (no build tools needed - using pre-built wheels)
+# Install system dependencies
 RUN apt-get update && apt-get install -y \
+    build-essential \
+    libpq-dev \
     libglib2.0-0 \
     libsm6 \
     libxext6 \
     libxrender-dev \
-    postgresql-client \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Upgrade pip for better wheel support
+# Upgrade pip
 RUN pip install --upgrade pip setuptools wheel
 
-# Install Python dependencies (all have pre-built wheels)
+# Install Python dependencies
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy application code
+# Copy project
 COPY . .
 
-# Create necessary directories
+# Create directories
 RUN mkdir -p /app/staticfiles /app/media
 
-# Collect static files
-RUN python manage.py collectstatic --noinput || true
+# ⚠️ DO NOT run collectstatic here
 
+# Expose port
 EXPOSE 8000
 
-# Railway will provide the start command via railway.toml
-# Do NOT set CMD here
+# Safe default (Railway overrides this anyway)
+CMD ["gunicorn", "config.wsgi:application", "--bind", "0.0.0.0:8000"]

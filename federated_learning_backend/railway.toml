@@ -1,63 +1,9 @@
 [build]
 builder = "dockerfile"
-# Uses Dockerfile from repository root
 
 [deploy]
-# Django service
-[[services]]
-name = "django-fl"
-# Runs migrations and Django app
-startCommand = "python manage.py migrate && gunicorn config.wsgi:application --bind 0.0.0.0:8000 --workers 4"
-# Health check endpoint
-healthCheck = "/api/fl/rounds/current/"
-# Scale configuration
-minReplicas = 1
-maxReplicas = 3
+startCommand = "python manage.py migrate && python manage.py collectstatic --noinput && gunicorn config.wsgi:application --bind 0.0.0.0:$PORT --workers 3"
 
-[[services]]
-name = "celery-worker"
-# Celery worker for async tasks
-startCommand = "celery -A config worker -l info --concurrency 4"
-# No health check needed for worker
-
-[[services]]
-name = "celery-beat"
-# Celery beat for scheduled tasks
-startCommand = "celery -A config beat -l info --scheduler django_celery_beat.schedulers:DatabaseScheduler"
-# Single instance only
-maxReplicas = 1
-
-# Shared plugins (PostgreSQL, Redis)
-[[plugins]]
-source = "railway/postgresql"
-
-[[plugins]]
-source = "railway/redis"
-
-[environment]
-# Railway automatically exposes these variables:
-# DATABASE_URL - PostgreSQL connection string
-# REDIS_URL - Redis connection string
-
-# Additional environment configuration
-variables = """
-DEBUG=False
-ALLOWED_HOSTS=*.railway.app
-SECURE_SSL_REDIRECT=True
-SESSION_COOKIE_SECURE=True
-CSRF_COOKIE_SECURE=True
-SECURE_HSTS_SECONDS=31536000
-SECURE_HSTS_INCLUDE_SUBDOMAINS=True
-"""
-
-# Media storage (persistent)
-[[volumes]]
-path = "/app/media"
-name = "media-storage"
-size = "1GB"
-
-# Static files (can be regenerated)
-[[volumes]]
-path = "/app/staticfiles"
-name = "static-files"
-size = "500MB"
+[env]
+DEBUG = "False"
+ALLOWED_HOSTS = "*.railway.app"
