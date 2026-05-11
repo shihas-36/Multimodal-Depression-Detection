@@ -14,12 +14,13 @@ class Device(models.Model):
     ]
     
     device_id = models.UUIDField(unique=True, default=uuid.uuid4)
+    hardware_id = models.CharField(max_length=255, unique=True, null=True, blank=True, help_text="Unique hardware ID (Android ID or iOS Vendor ID)")
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='devices', null=True, blank=True)
     device_name = models.CharField(max_length=255)
     device_type = models.CharField(max_length=50)  # iOS, Android
-    os_version = models.CharField(max_length=50)
-    app_version = models.CharField(max_length=20)
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='active')
+    os_version = models.CharField(max_length=100)
+    app_version = models.CharField(max_length=50)
+    status = models.CharField(max_length=50, choices=STATUS_CHOICES, default='active')
     last_seen = models.DateTimeField(auto_now=True)
     created_at = models.DateTimeField(auto_now_add=True)
     
@@ -29,7 +30,7 @@ class Device(models.Model):
 
 class ModelVersion(models.Model):
     """Global model versioning and artifact storage."""
-    version = models.CharField(max_length=20, unique=True)  # e.g., "1.0.0"
+    version = models.CharField(max_length=100, unique=True)  # e.g., "1.0.0" or "round_122"
     description = models.TextField(blank=True)
     model_file = models.FileField(upload_to='models/')
     onnx_file = models.FileField(upload_to='models/onnx/', null=True, blank=True)
@@ -47,6 +48,7 @@ class ModelVersion(models.Model):
 
 class Round(models.Model):
     """Federated learning round lifecycle."""
+
     STATUS_CHOICES = [
         ('pending', 'Pending'),
         ('active', 'Active'),
@@ -55,30 +57,71 @@ class Round(models.Model):
         ('completed', 'Completed'),
         ('failed', 'Failed'),
     ]
-    
+
     round_number = models.IntegerField(unique=True)
-    model_version = models.ForeignKey(ModelVersion, on_delete=models.PROTECT, help_text="Initial model for this round")
-    aggregated_model_version = models.ForeignKey(ModelVersion, on_delete=models.SET_NULL, null=True, blank=True, related_name='aggregated_rounds', help_text="Model version created from this round's aggregation")
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+
+    model_version = models.ForeignKey(
+        ModelVersion,
+        on_delete=models.PROTECT,
+        help_text="Initial model for this round"
+    )
+
+    aggregated_model_version = models.ForeignKey(
+        ModelVersion,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='aggregated_rounds',
+        help_text="Model version created from this round's aggregation"
+    )
+
+    status = models.CharField(
+        max_length=50,
+        choices=STATUS_CHOICES,
+        default='pending'
+    )
+
     min_clients = models.IntegerField(default=3)
     max_clients = models.IntegerField(default=100)
+
     started_at = models.DateTimeField(null=True, blank=True)
     closed_at = models.DateTimeField(null=True, blank=True)
     ended_at = models.DateTimeField(null=True, blank=True)
+
     aggregation_status = models.CharField(
-        max_length=50, 
+        max_length=50,
         default='pending',
         help_text="pending, in_progress, completed, failed"
     )
+
     created_at = models.DateTimeField(auto_now_add=True)
-    
+
+    def save(self, *args, **kwargs):
+
+        is_new = self.pk is None
+
+        super().save(*args, **kwargs)
+
+        # Only when NEW round is created
+        if is_new:
+
+            RoundMetrics.objects.get_or_create(round=self)
+
+            # Schedule timeout ONLY ONCE
+            if self.status == 'active':
+
+                from .tasks import auto_close_round
+
+                auto_close_round.apply_async(
+                    args=[self.id],
+                    countdown=300
+                )
+
     class Meta:
         ordering = ['-round_number']
-    
+
     def __str__(self):
         return f"Round {self.round_number} - {self.status}"
-
-
 class ClientUpdate(models.Model):
     """Client federated update submission."""
     STATUS_CHOICES = [
@@ -99,7 +142,7 @@ class ClientUpdate(models.Model):
     parameters_hash = models.CharField(max_length=64, help_text="SHA256 hash of parameters")
     dp_clip_norm = models.FloatField(null=True, blank=True)
     dp_noise_scale = models.FloatField(null=True, blank=True)
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    status = models.CharField(max_length=50, choices=STATUS_CHOICES, default='pending')
     submitted_at = models.DateTimeField(auto_now_add=True)
     validated_at = models.DateTimeField(null=True, blank=True)
     is_valid = models.BooleanField(default=True, help_text="Passed validation during aggregation")

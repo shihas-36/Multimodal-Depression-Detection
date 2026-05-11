@@ -193,31 +193,38 @@ def submit_update(request):
             status=status.HTTP_400_BAD_REQUEST
         )
     
-    # FIX 5: Safe Weight Structure Validation (NPZ format)
+    # TEMP MVP VALIDATION — Accepts raw float32 bytes from Flutter client.
+    # Original strict NPZ validation is commented out below; restore when
+    # Flutter client emits real NPZ-formatted weight deltas.
     try:
-        # Deserialize NPZ format (safe, no pickle)
-        bio = BytesIO(weight_delta)
-        with np.load(bio, allow_pickle=False) as npz_file:
-            weights = {key: npz_file[key] for key in npz_file.files}
-        
-        # Validate structure
-        is_valid, error_msg = validate_weights_structure(weights)
-        if not is_valid:
-            return Response(
-                {'error': f'Invalid weight structure: {error_msg}'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        print("=== DEBUG WEIGHT TYPE ===")
-        print("TYPE:", type(weights))
-        if weights:
-            first_key = list(weights.keys())[0]
-            print("FIRST VALUE TYPE:", type(weights[first_key]))
-        print("=========================")
-        
+        print("=== SIMULATED FL UPDATE RECEIVED ===")
+        print(f"Weight bytes size: {len(weight_delta)}")
+        print("===================================")
+
+    # --- Original FIX 5 block (restore for production) ---
+    # try:
+    #     bio = BytesIO(weight_delta)
+    #     with np.load(bio, allow_pickle=False) as npz_file:
+    #         weights = {key: npz_file[key] for key in npz_file.files}
+    #
+    #     is_valid, error_msg = validate_weights_structure(weights)
+    #     if not is_valid:
+    #         return Response(
+    #             {'error': f'Invalid weight structure: {error_msg}'},
+    #             status=status.HTTP_400_BAD_REQUEST
+    #         )
+    #
+    #     print("=== DEBUG WEIGHT TYPE ===")
+    #     print("TYPE:", type(weights))
+    #     if weights:
+    #         first_key = list(weights.keys())[0]
+    #         print("FIRST VALUE TYPE:", type(weights[first_key]))
+    #     print("=========================")
+    # ------------------------------------------------------
+
     except Exception as e:
         return Response(
-            {'error': f'Invalid weight structure: {str(e)}'},
+            {'error': f'Weight validation failed: {str(e)}'},
             status=status.HTTP_400_BAD_REQUEST
         )
     
@@ -466,6 +473,14 @@ def trigger_aggregation(request, round_id):
             {'error': 'Round must be closed before aggregation'},
             status=status.HTTP_400_BAD_REQUEST
         )
+    
+    # FIX 1: Trigger async aggregation task
+    trigger_aggregation_task.delay(round_id)
+    
+    return Response({
+        'status': 'aggregation_started',
+        'round_id': round_id
+    }, status=status.HTTP_200_OK)
     
     # FIX 1: Trigger async aggregation task
     trigger_aggregation_task.delay(round_id)

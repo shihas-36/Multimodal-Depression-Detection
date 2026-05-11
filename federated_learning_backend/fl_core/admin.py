@@ -4,10 +4,10 @@ from .models import Device, ModelVersion, Round, ClientUpdate, RoundMetrics, Dev
 
 @admin.register(Device)
 class DeviceAdmin(admin.ModelAdmin):
-    list_display = ['device_name', 'device_type', 'status', 'last_seen', 'created_at']
+    list_display = ['device_name', 'device_type', 'status', 'hardware_id', 'last_seen', 'created_at']
     list_filter = ['status', 'device_type', 'created_at']
-    search_fields = ['device_name', 'device_id']
-    readonly_fields = ['device_id', 'created_at', 'last_seen']
+    search_fields = ['device_name', 'device_id', 'hardware_id']
+    readonly_fields = ['device_id', 'hardware_id', 'created_at', 'last_seen']
 
 
 @admin.register(ModelVersion)

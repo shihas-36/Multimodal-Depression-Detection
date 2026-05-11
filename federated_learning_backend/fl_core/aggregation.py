@@ -21,6 +21,7 @@ from django.utils import timezone
 from django.db.models import Avg
 from django.db import transaction
 import logging
+from .model_communication import trigger_model_build_and_store
 
 logger = logging.getLogger(__name__)
 
@@ -316,9 +317,8 @@ def aggregate_updates(round_obj):
         aggregated_hash = hashlib.sha256(aggregated_data).hexdigest()
         
         with transaction.atomic():
-            # Create new model version
             new_version = ModelVersion.objects.create(
-                version=f"{round_obj.model_version.version}.aggregated.{round_obj.round_number}",
+                version=f"round_{round_obj.round_number}",
                 description=f"Aggregated model from round {round_obj.round_number}",
                 model_data=aggregated_data,
                 is_active=False  # Must be explicitly activated
@@ -345,6 +345,14 @@ def aggregate_updates(round_obj):
         metrics.aggregation_time_ms = 0  # Can measure if needed
         metrics.save()
         
+        # Send aggregated weights to model service and get built ONNX model
+        model_comm_result = trigger_model_build_and_store(
+            aggregated_data,
+            round_obj.round_number,
+            aggregated_hash,
+            model_version_id=new_version.id
+        )
+        
         return {
             'status': 'success',
             'participating_count': len(valid_updates),
@@ -352,6 +360,7 @@ def aggregate_updates(round_obj):
             'total_examples': total_examples,
             'aggregated_model_version': new_version.version,
             'aggregated_model_hash': aggregated_hash,
+            'model_communication': model_comm_result,
             'metrics': {
                 'avg_local_loss': metrics.avg_local_loss,
                 'avg_local_accuracy': metrics.avg_local_accuracy,

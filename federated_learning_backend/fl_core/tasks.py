@@ -6,7 +6,7 @@ from celery import shared_task
 import logging
 from django.utils import timezone
 from .models import Round, ClientUpdate, RoundMetrics
-from .aggregation import run_aggregation
+from .aggregation import run_aggregation, validate_client_update
 
 logger = logging.getLogger(__name__)
 
@@ -51,7 +51,6 @@ def auto_close_round(round_id):
 
 
 @shared_task
-@shared_task
 def trigger_aggregation_task(round_id):
     """
     Centralized aggregation task - ONLY execution point for aggregation.
@@ -64,61 +63,55 @@ def trigger_aggregation_task(round_id):
     FIX 3: Prevent duplicate execution
     FIX 4: Lock with aggregating status
     """
-    print("🚀 TASK EXECUTED: trigger_aggregation_task")
     logger.info(f"🚀 TASK EXECUTED: trigger_aggregation_task for round {round_id}")
+    round_obj = None
     
     try:
         round_obj = Round.objects.get(id=round_id)
         
-        if round_obj.status != 'closed':
-            logger.warning(f"Round {round_id} is not closed, cannot aggregate")
-            return {"status": "error", "reason": "round_not_closed"}
-        
-        # FIX 3: Check if already aggregated (idempotent)
-        if round_obj.status == 'aggregated':
-            logger.info(f"Round {round_id} already aggregated, skipping")
-            return {"status": "already_aggregated", "round_id": round_id}
-        
-        # FIX 4: Use aggregating status as lock
-        if round_obj.aggregation_status == 'in_progress':
-            logger.warning(f"Round {round_id} aggregation already running")
-            return {"status": "already_running", "round_id": round_id}
-        
-        logger.info(f"Starting aggregation for round {round_id}")
-        
-        # FIX 4: Lock - transition to aggregating state
+        # If already aggregated, we still want to ensure a NEXT round exists
+        if round_obj.status == 'aggregated' or round_obj.status == 'failed':
+            logger.info(f"Round {round_id} already processed. Ensuring next round exists.")
+            create_next_round(round_obj)
+            return {"status": "skipped_already_processed"}
+
+        # Set locking status
         round_obj.aggregation_status = 'in_progress'
         round_obj.save()
         
-        # Run aggregation
+        # Run aggregation logic
         result = run_aggregation(round_obj)
         
         if result.get('status') == 'success':
-            # FIX 3 + 4: Mark as aggregated (prevent re-execution)
+            # Mark current round as finished successfully
             round_obj.status = 'aggregated'
             round_obj.aggregation_status = 'completed'
             round_obj.ended_at = timezone.now()
             round_obj.save()
-            
-            logger.info(f"Round {round_id} aggregation completed successfully")
+            logger.info(f"✅ Round {round_id} aggregated successfully")
         else:
+            # Mark as failed if aggregation logic returned failure
+            reason = result.get('reason', 'Unknown error')
+            logger.error(f"❌ Round {round_id} aggregation failed: {reason}")
+            round_obj.status = 'failed'
             round_obj.aggregation_status = 'failed'
             round_obj.save()
-            logger.error(f"Round {round_id} aggregation failed: {result.get('reason')}")
-        
-        return result
-    except Round.DoesNotExist:
-        logger.error(f"Round {round_id} not found")
-        return {"status": "error", "reason": "round_not_found"}
+
     except Exception as e:
-        logger.error(f"Error aggregating round {round_id}: {e}")
-        try:
-            round_obj = Round.objects.get(id=round_id)
-            round_obj.aggregation_status = 'failed'
+        logger.error(f"Critical error in task for round {round_id}: {e}")
+        if round_obj:
+            round_obj.status = 'failed'
             round_obj.save()
-        except:
-            pass
-        return {"status": "error", "reason": str(e)}
+    
+    finally:
+        # ALWAYS attempt to create the next round here
+        if round_obj:
+            new_round = create_next_round(round_obj)
+            if new_round:
+                return {"status": "finished", "next_round_id": new_round.id}
+            return {"status": "finished", "next_round_note": "already_exists_or_failed"}
+    return {"status": "error", "reason": "round_not_found"}
+
 
 
 @shared_task
@@ -163,9 +156,9 @@ def cleanup_old_rounds(days=30):
     cutoff_date = timezone.now() - timedelta(days=days)
     
     old_rounds = Round.objects.filter(
-        status='completed',
-        ended_at__lt=cutoff_date
-    )
+    status__in=['completed', 'aggregated'],
+    ended_at__lt=cutoff_date
+)
     
     count = old_rounds.count()
     old_rounds.delete()
@@ -200,3 +193,40 @@ def periodic_health_check():
         }
     except Exception as e:
         logger.error(f"Health check failed: {e}")
+
+from .models import ModelVersion
+
+
+def create_next_round(previous_round):
+    """
+    Automatically create next FL round after successful aggregation.
+    Guaranteed creation of the next FL round.
+    """
+    next_round_number = previous_round.round_number + 1
+    
+    # 1. Check if it already exists (to prevent duplicates)
+    existing = Round.objects.filter(round_number=next_round_number).first()
+    if existing:
+        logger.info(f"⏭️ Round {next_round_number} already exists. ID: {existing.id}")
+        return existing
+
+    # 2. Determine which model to use
+    # If aggregation failed, use the model from the previous round so the chain continues
+    model_to_use = previous_round.aggregated_model_version or previous_round.model_version
+
+    try:
+        new_round = Round.objects.create(
+            round_number=next_round_number,
+            model_version=model_to_use,
+            status='active',
+            min_clients=previous_round.min_clients,
+            max_clients=previous_round.max_clients,
+            started_at=timezone.now(),
+        )
+        
+        logger.info(f"✅ SUCCESS: Created Round {new_round.round_number} (ID: {new_round.id})")
+        return new_round
+
+    except Exception as e:
+        logger.error(f"❌ FAILED to create next round: {e}")
+        return None

@@ -1,40 +1,35 @@
 FROM python:3.10-slim
 
-# Prevent buffering (important for logs)
-ENV PYTHONUNBUFFERED=1
-
 WORKDIR /app
 
-# Install system dependencies
+# Install minimal runtime dependencies (no build tools needed - using pre-built wheels)
 RUN apt-get update && apt-get install -y \
-    build-essential \
-    libpq-dev \
     libglib2.0-0 \
     libsm6 \
     libxext6 \
     libxrender-dev \
+    postgresql-client \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Upgrade pip
+# Upgrade pip for better wheel support
 RUN pip install --upgrade pip setuptools wheel
 
-# Install Python dependencies
+# Install Python dependencies (all have pre-built wheels)
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy project
+# Copy application code
 COPY . .
 
-# Create directories
+# Create necessary directories
 RUN mkdir -p /app/staticfiles /app/media
 
-# ⚠️ DO NOT run collectstatic here
+# Collect static files
+RUN python manage.py collectstatic --noinput 
 
-COPY entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
-
-# Expose port
 EXPOSE 8000
 
-CMD ["/entrypoint.sh"]
+
+# Default command (overridden in docker-compose for production)
+CMD ["gunicorn", "--bind", "0.0.0.0:8000", "config.wsgi:application"]

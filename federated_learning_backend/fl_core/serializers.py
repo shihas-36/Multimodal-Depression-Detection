@@ -22,17 +22,45 @@ class DeviceRegisterSerializer(serializers.Serializer):
     device_type = serializers.CharField(max_length=50)  # iOS, Android
     os_version = serializers.CharField(max_length=50)
     app_version = serializers.CharField(max_length=20)
+    hardware_id = serializers.CharField(max_length=255, required=False, allow_blank=True)
     
     def create(self, validated_data):
         from datetime import timedelta
         from django.utils import timezone
+        import secrets
         
-        device = Device.objects.create(**validated_data)
-        token = DeviceToken.objects.create(
+        hardware_id = validated_data.get('hardware_id')
+        
+        if hardware_id:
+            # Idempotent registration: Find existing device or create new one
+            device, created = Device.objects.update_or_create(
+                hardware_id=hardware_id,
+                defaults={
+                    'device_name': validated_data.get('device_name'),
+                    'device_type': validated_data.get('device_type'),
+                    'os_version': validated_data.get('os_version'),
+                    'app_version': validated_data.get('app_version'),
+                    'status': 'active',
+                }
+            )
+            if not created:
+                device.last_seen = timezone.now()
+                device.save()
+        else:
+            # Fallback to old behavior if no hardware_id provided
+            device = Device.objects.create(**validated_data)
+        
+        # Always generate a fresh token on registration (security)
+        # or update existing one if it's already there
+        token, _ = DeviceToken.objects.update_or_create(
             device=device,
-            token=secrets.token_urlsafe(32),
-            expires_at=timezone.now() + timedelta(hours=24)  # FIX 1: Token expires in 24 hours
+            defaults={
+                'token': secrets.token_urlsafe(32),
+                'expires_at': timezone.now() + timedelta(hours=24),
+                'is_active': True
+            }
         )
+        
         return device, token
 
 
