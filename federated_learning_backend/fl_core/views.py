@@ -165,16 +165,16 @@ def submit_update(request):
             status=status.HTTP_400_BAD_REQUEST
         )
     
-    # FIX 6: Model Version Check
-    client_model_version = validated_data.get('model_version')
-    if client_model_version != round_obj.model_version.version:
-        return Response(
-            {'error': 'Model version mismatch'},
-            status=status.HTTP_400_BAD_REQUEST
-        )
+    # FIX 6: Model Version Check (REMOVED as per user request for inspection)
+    # client_model_version = validated_data.get('model_version')
+    # if client_model_version != round_obj.model_version.version:
+    #     return Response(
+    #         {'error': 'Model version mismatch'},
+    #         status=status.HTTP_400_BAD_REQUEST
+    #     )
     
-    # Remove model_version from validated_data before create
-    validated_data.pop('model_version')
+    # Ensure model_version is removed before model creation
+    validated_data.pop('model_version', None)
     
     # Decode and validate weight delta
     try:

@@ -317,11 +317,14 @@ def aggregate_updates(round_obj):
         aggregated_hash = hashlib.sha256(aggregated_data).hexdigest()
         
         with transaction.atomic():
-            new_version = ModelVersion.objects.create(
+            # Create or update model version
+            new_version, _ = ModelVersion.objects.update_or_create(
                 version=f"round_{round_obj.round_number}",
-                description=f"Aggregated model from round {round_obj.round_number}",
-                model_data=aggregated_data,
-                is_active=False  # Must be explicitly activated
+                defaults={
+                    'description': f"Aggregated model from round {round_obj.round_number}",
+                    'model_data': aggregated_data,
+                    'is_active': False
+                }
             )
             
             # Link aggregated model to round
