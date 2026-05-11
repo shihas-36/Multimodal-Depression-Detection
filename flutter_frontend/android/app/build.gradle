@@ -29,6 +29,11 @@ android {
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+        
+        // ONNX Runtime native library support
+        ndk {
+            abiFilters 'arm64-v8a', 'armeabi-v7a', 'x86_64'
+        }
     }
 
     buildTypes {
@@ -38,12 +43,27 @@ android {
             signingConfig = signingConfigs.debug
         }
     }
+
+    packagingOptions {
+        pickFirst '**/libc++_shared.so'
+        jniLibs {
+            // Keep one copy when both Flutter plugin and Maven AAR provide ONNX runtime.
+            pickFirsts += ['**/libonnxruntime.so']
+        }
+    }
 }
 
 dependencies {
     // Health Connect permission flow stability (mirrors working sample guidance).
     implementation "androidx.core:core:1.13.1"
     implementation "androidx.core:core-ktx:1.13.1"
+
+    // Provides x86_64 ONNX native libs for emulator; pickFirst above avoids duplicate merge failure.
+    implementation "com.microsoft.onnxruntime:onnxruntime-android:1.25.1"
+
+    // PyTorch Mobile Full — required for full TorchScript models (.pt)
+    implementation 'org.pytorch:pytorch_android:2.1.0'
+    implementation 'org.pytorch:pytorch_android_torchvision:2.1.0'
 }
 
 flutter {

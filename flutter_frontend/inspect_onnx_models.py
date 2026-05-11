@@ -54,7 +54,7 @@ def inspect_model(model_path):
         return False
 
 if __name__ == '__main__':
-    models_dir = Path(__file__).parent / 'asset' / 'models'
+    models_dir = Path(__file__).parent / 'assets' / 'models'
     
     models = [
         'model_quantized.onnx',

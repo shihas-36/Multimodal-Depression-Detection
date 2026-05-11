@@ -10,10 +10,12 @@ import android.net.Uri
 
 class MainActivity: FlutterFragmentActivity() {
     private val CHANNEL = "com.healthml.mindpulse/permissions"
+    private val FUSION_CHANNEL = "fusion_trainer"
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
-        
+
+        // ── Existing: Health Connect permissions channel ──────────────────────
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL)
             .setMethodCallHandler { call, result ->
                 when (call.method) {
@@ -30,6 +32,43 @@ class MainActivity: FlutterFragmentActivity() {
                                 "Unable to open Health Connect settings or install page",
                                 null
                             )
+                        }
+                    }
+                    else -> result.notImplemented()
+                }
+            }
+
+        // ── New: PyTorch Fusion Trainer channel ───────────────────────────────
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, FUSION_CHANNEL)
+            .setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "trainFusionModel" -> {
+                        try {
+                            val textEmbedding =
+                                call.argument<List<Double>>("textEmbedding")
+                            val wearableEmbedding =
+                                call.argument<List<Double>>("wearableEmbedding")
+                            val label =
+                                call.argument<Int>("label")
+
+                            val trainer = FusionTrainer.getInstance(applicationContext)
+                            val output = trainer.train(
+                                textEmbedding!!,
+                                wearableEmbedding!!,
+                                label!!
+                            )
+                            result.success(output)
+                        } catch (e: Exception) {
+                            result.error("TRAIN_ERROR", e.message, null)
+                        }
+                    }
+                    "getLatestWeights" -> {
+                        try {
+                            val trainer = FusionTrainer.getInstance(applicationContext)
+                            val weights = trainer.getLatestWeights()
+                            result.success(weights)
+                        } catch (e: Exception) {
+                            result.error("WEIGHT_EXTRACTION_ERROR", e.message, null)
                         }
                     }
                     else -> result.notImplemented()

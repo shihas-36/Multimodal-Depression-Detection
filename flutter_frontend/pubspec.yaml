@@ -76,6 +76,9 @@ dependencies:
   onnxruntime: ^1.4.1
   tokenizer: ^1.0.0
 
+  # NPZ byte serialization (Federated Learning weight export — TEMP MVP)
+  archive: ^4.0.9
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -98,14 +101,15 @@ flutter:
   # the material Icons class.
   uses-material-design: true
   assets:
-    - asset/models/model_quantized.onnx
-    - asset/models/module2_lstm.onnx
-    - asset/models/module2_scaler.pkl
-    - asset/models/module3_fusion.onnx
-    - asset/models/tokenizer/tokenizer.json
-    - asset/models/tokenizer/tokenizer_config.json
-    - asset/models/tokenizer/config.json
-    - asset/models/tokenizer/special_tokens_map.json
+    - assets/models/model_quantized.onnx
+    - assets/models/module2_lstm.onnx
+    - assets/models/module2_scaler.pkl
+    - assets/models/module3_fusion.onnx
+    - assets/models/tokenizer/tokenizer.json
+    - assets/models/tokenizer/tokenizer_config.json
+    - assets/models/tokenizer/config.json
+    - assets/models/tokenizer/special_tokens_map.json
+    - assets/models/best_fusion_model.pt  # Uncomment once model file is placed here
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images
