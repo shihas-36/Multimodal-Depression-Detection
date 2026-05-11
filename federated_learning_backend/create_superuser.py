@@ -12,9 +12,9 @@ from django.contrib.auth import get_user_model
 User = get_user_model()
 
 # Get superuser credentials from environment variables with defaults
-username = os.environ.get("DJANGO_SUPERUSER_USERNAME", "admin")
-password = os.environ.get("DJANGO_SUPERUSER_PASSWORD", "Admin123456")
-email = os.environ.get("DJANGO_SUPERUSER_EMAIL", "admin@example.com")
+username = os.environ.get("DJANGO_SUPERUSER_USERNAME")
+password = os.environ.get("DJANGO_SUPERUSER_PASSWORD")
+email = os.environ.get("DJANGO_SUPERUSER_EMAIL")
 
 if not User.objects.filter(username=username).exists():
     User.objects.create_superuser(
