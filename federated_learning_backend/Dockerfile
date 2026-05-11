@@ -31,5 +31,5 @@ RUN python manage.py collectstatic --noinput
 EXPOSE 8000
 
 
-# Default command (overridden in docker-compose for production)
-CMD ["gunicorn", "--bind", "0.0.0.0:8000", "config.wsgi:application"]
+# Default command
+CMD ["sh", "-c", "python create_superuser.py && python manage.py runserver 0.0.0.0:8000"]
