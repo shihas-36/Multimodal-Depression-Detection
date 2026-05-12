@@ -1,5 +1,6 @@
 #!/bin/sh
 
+SERVICE=${SERVICE:-web}
 echo "Starting service: $SERVICE"
 
 if [ "$SERVICE" = "web" ]; then

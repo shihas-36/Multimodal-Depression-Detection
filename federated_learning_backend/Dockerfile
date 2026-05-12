@@ -25,11 +25,13 @@ COPY . .
 # Create necessary directories
 RUN mkdir -p /app/staticfiles /app/media
 
-# Collect static files
+# Collect static files during build
 RUN python manage.py collectstatic --noinput 
+
+# Make entrypoint script executable
+RUN chmod +x entrypoint.sh
 
 EXPOSE 8000
 
-
-# Default command
-CMD ["sh", "-c", "python manage.py migrate && python create_superuser.py && python manage.py runserver 0.0.0.0:8000"]
+# Use entrypoint script to handle different services (web, worker, beat)
+ENTRYPOINT ["/bin/sh", "/app/entrypoint.sh"]
