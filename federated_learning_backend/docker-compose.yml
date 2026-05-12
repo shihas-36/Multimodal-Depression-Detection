@@ -32,12 +32,12 @@ services:
   django:
     build: .
     container_name: django_app
-    command: sh -c "python manage.py migrate && gunicorn --bind 0.0.0.0:8000 --workers 4 config.wsgi:application"
+    command: sh -c "python manage.py migrate && python create_superuser.py && gunicorn --bind 0.0.0.0:8000 --workers 4 config.wsgi:application"
     environment:
       DEBUG: "False"
       SECRET_KEY: "your-secret-key-change-in-production"
-      ALLOWED_HOSTS: "localhost,127.0.0.1,django"
-      CORS_ALLOWED_ORIGINS: "http://localhost:3000,http://127.0.0.1:3000"
+      ALLOWED_HOSTS: "localhost,127.0.0.1,django,10.0.2.2,192.168.1.3,10.252.93.112,10.234.4.112,10.34.207.197,10.77.126.197,10.116.76.197"
+      CORS_ALLOWED_ORIGINS: "http://localhost:3000,http://127.0.0.1:3000,http://192.168.1.3:3000,http://10.252.93.112:3000,http://10.234.4.112:3000,http://10.77.126.197:3000,http://10.116.76.197"
       DB_NAME: federated_learning
       DB_USER: postgres
       DB_PASSWORD: postgres
@@ -46,8 +46,6 @@ services:
       REDIS_URL: "redis://redis:6379/0"
       CELERY_BROKER_URL: "redis://redis:6379/0"
       CELERY_RESULT_BACKEND: "redis://redis:6379/0"
-      MODEL_SERVICE_URL: "http://model_builder:8080"
-      MODEL_SERVICE_API_KEY: "fl_secret_key_2026"
     volumes:
       - .:/app
       - static_volume:/app/staticfiles
@@ -65,19 +63,6 @@ services:
       timeout: 5s
       retries: 5
 
-  model_builder:
-    build: ../fl-model-builder
-    container_name: model_builder
-    environment:
-      MODEL_SERVICE_API_KEY: "fl_secret_key_2026"
-    ports:
-      - "8080:8080"
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
   celery_worker:
     build: .
     container_name: celery_worker
@@ -85,7 +70,7 @@ services:
     environment:
       DEBUG: "False"
       SECRET_KEY: "your-secret-key-change-in-production"
-      ALLOWED_HOSTS: "localhost,127.0.0.1,django"
+      ALLOWED_HOSTS: "localhost,127.0.0.1,django,192.168.1.3,10.252.93.112,10.234.4.112,10.34.207.197,10.77.126.197,10.116.76.197"
       DB_NAME: federated_learning
       DB_USER: postgres
       DB_PASSWORD: postgres
@@ -94,8 +79,6 @@ services:
       REDIS_URL: "redis://redis:6379/0"
       CELERY_BROKER_URL: "redis://redis:6379/0"
       CELERY_RESULT_BACKEND: "redis://redis:6379/0"
-      MODEL_SERVICE_URL: "http://model_builder:8080"
-      MODEL_SERVICE_API_KEY: "fl_secret_key_2026"
     volumes:
       - .:/app
     depends_on:
@@ -113,7 +96,7 @@ services:
     environment:
       DEBUG: "False"
       SECRET_KEY: "your-secret-key-change-in-production"
-      ALLOWED_HOSTS: "localhost,127.0.0.1,django"
+      ALLOWED_HOSTS: "localhost,127.0.0.1,django,192.168.1.3,10.252.93.112,10.234.4.112,10.34.207.197,10.77.126.197,10.116.76.197"
       DB_NAME: federated_learning
       DB_USER: postgres
       DB_PASSWORD: postgres
@@ -122,8 +105,6 @@ services:
       REDIS_URL: "redis://redis:6379/0"
       CELERY_BROKER_URL: "redis://redis:6379/0"
       CELERY_RESULT_BACKEND: "redis://redis:6379/0"
-      MODEL_SERVICE_URL: "http://model_builder:8080"
-      MODEL_SERVICE_API_KEY: "fl_secret_key_2026"
     volumes:
       - .:/app
     depends_on:
