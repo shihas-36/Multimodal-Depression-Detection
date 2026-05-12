@@ -18,9 +18,9 @@ class Device(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='devices', null=True, blank=True)
     device_name = models.CharField(max_length=255)
     device_type = models.CharField(max_length=50)  # iOS, Android
-    os_version = models.CharField(max_length=100)
-    app_version = models.CharField(max_length=50)
-    status = models.CharField(max_length=50, choices=STATUS_CHOICES, default='active')
+    os_version = models.CharField(max_length=50)
+    app_version = models.CharField(max_length=20)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='active')
     last_seen = models.DateTimeField(auto_now=True)
     created_at = models.DateTimeField(auto_now_add=True)
     
@@ -30,7 +30,7 @@ class Device(models.Model):
 
 class ModelVersion(models.Model):
     """Global model versioning and artifact storage."""
-    version = models.CharField(max_length=100, unique=True)  # e.g., "1.0.0" or "round_122"
+    version = models.CharField(max_length=20, unique=True)  # e.g., "1.0.0"
     description = models.TextField(blank=True)
     model_file = models.FileField(upload_to='models/')
     onnx_file = models.FileField(upload_to='models/onnx/', null=True, blank=True)
@@ -76,7 +76,7 @@ class Round(models.Model):
     )
 
     status = models.CharField(
-        max_length=50,
+        max_length=20,
         choices=STATUS_CHOICES,
         default='pending'
     )
@@ -142,7 +142,7 @@ class ClientUpdate(models.Model):
     parameters_hash = models.CharField(max_length=64, help_text="SHA256 hash of parameters")
     dp_clip_norm = models.FloatField(null=True, blank=True)
     dp_noise_scale = models.FloatField(null=True, blank=True)
-    status = models.CharField(max_length=50, choices=STATUS_CHOICES, default='pending')
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
     submitted_at = models.DateTimeField(auto_now_add=True)
     validated_at = models.DateTimeField(null=True, blank=True)
     is_valid = models.BooleanField(default=True, help_text="Passed validation during aggregation")
