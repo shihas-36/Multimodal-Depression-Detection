@@ -105,6 +105,21 @@ def trigger_aggregation_task(round_id):
     return {"status": "error", "reason": "round_not_found"}
 
 
+@shared_task
+def monitor_active_rounds():
+    """
+    Check for active rounds that have reached min_clients.
+    """
+    active_rounds = Round.objects.filter(status='active')
+    for round_obj in active_rounds:
+        participating = round_obj.client_updates.filter(
+            status__in=['received', 'validated']
+        ).count()
+        
+        if participating >= round_obj.min_clients:
+            logger.info(f"Round {round_obj.round_number} (ID: {round_obj.id}) reached min_clients ({participating}), triggering aggregation")
+            trigger_aggregation_task.delay(round_obj.id)
+
 
 @shared_task
 def validate_pending_updates():

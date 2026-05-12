@@ -11,6 +11,13 @@ app.config_from_object('django.conf:settings', namespace='CELERY')
 # Auto-discover tasks from all registered Django apps
 app.autodiscover_tasks()
 
+app.conf.beat_schedule = {
+    'monitor-active-rounds': {
+        'task': 'fl_core.tasks.monitor_active_rounds',
+        'schedule': 30.0,
+    },
+}
+
 
 @app.task(bind=True)
 def debug_task(self):
